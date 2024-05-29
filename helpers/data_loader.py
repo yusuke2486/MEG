@@ -27,13 +27,19 @@ def normalize_features(mx):
     return mx
 
 def accuracy(output, labels):
+    # print(f'output.shape: {output.shape}')
+    # print(f'output: {output}')
     preds = output.max(1)[1].type_as(labels)
+    print(f'preds.shape: {preds.shape}')
+    print(f'labels.shape: {labels.shape}')
+    print(f'preds: {preds}')
+    print(f'labels: {labels}')
     correct = preds.eq(labels).double()
     correct = correct.sum()
     return correct / len(labels)
 
 # Data loader function
-def load_data(path="./data/cora/", dataset="cora"):
+def load_data(path="data/cora/", dataset="cora"):
     """Load citation network dataset (cora only for now)"""
     print('Loading {} dataset...'.format(dataset))
 

@@ -3,163 +3,343 @@ import torch.optim as optim
 import torch.nn.functional as F
 from torch_geometric.data import Data
 from torch_geometric.utils import dense_to_sparse
-from models.adj_generator import AdjacencyGenerator
-from models.environment import GCN
-from helpers.data_loader import load_data
-from helpers.q import QNetwork
+from torch.nn.attention import SDPBackend, sdpa_kernel
+import numpy as np
+import time
+
+from models.pi import AdjacencyGenerator  # 変更箇所
+from models.GCN import GCN
+from models.accuracy_calculator import calculate_accuracy
+from helpers.data_loader import load_data, accuracy
 from helpers.v import VNetwork
-from helpers.y import RewardCalculator, save_rewards
+from helpers.sampling import sample_nodes
+from helpers.weight_loader import load_all_weights
+from helpers.model_saver import save_all_weights
+from helpers.positional_encoding import positional_encoding
 
-# モデルの重みを保存する関数
-def save_model_weights(model, filename):
-    torch.save(model.state_dict(), filename)
+# Enable anomaly detection
+torch.autograd.set_detect_anomaly(True)
 
-# モデルの重みを読み込む関数
-def load_model_weights(model, filename):
-    model.load_state_dict(torch.load(filename))
-
-# 初期化パラメータ
+# Initialization parameters
 num_nodes = 2708
-num_node_features = 1440
+num_node_features = 1433
 num_classes = 7
 hidden_size = 64
 d_model = num_node_features
-num_heads = 8
+num_heads = 4
 d_ff = 256
-num_layers = 4
+num_layers = 1
 dropout = 0.1
 epochs = 100
 gamma = 0.99
+pos_enc_dim = 7  # Number of positional encoding dimensions, adjusted to be divisible by 8
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-# データの読み込み
+# Load data
 adj, features, labels, idx_train, idx_val, idx_test = load_data()
 
-# 特徴量のサイズをd_modelに調整
+data = Data(x=features, edge_index=None, y=labels)
+
+# Print shapes of loaded data
+print(f"adj shape: {adj.shape}")
+print(f"features shape: {features.shape}")
+print(f"labels shape: {labels.shape}")
+print(f"idx_train shape: {idx_train.shape}")
+print(f"idx_val shape: {idx_val.shape}")
+print(f"idx_test shape: {idx_test.shape}")
+
+# Adjust feature size to d_model
 if features.size(1) < d_model:
     features = torch.cat([features, torch.zeros(features.size(0), d_model - features.size(1))], dim=1)
 elif features.size(1) > d_model:
     features = features[:, :d_model]
 
-# GCN互換のデータオブジェクトを作成
-data = Data(x=features, edge_index=None, y=labels)
+# Calculate positional encoding and add to features
+pos_enc = positional_encoding(adj, pos_enc_dim)
+features = torch.cat([features, pos_enc], dim=1)
 
-# コンポーネントの初期化
-adj_generator = AdjacencyGenerator(d_model, num_heads, d_ff, num_layers, num_nodes, hidden_size, device, dropout).to(device)
-gcn_model = GCN(num_node_features, num_node_features, hidden_size).to(device)
-q_network = QNetwork(num_node_features, num_nodes, hidden_size).to(device)
-v_network = VNetwork(num_node_features, hidden_size).to(device)
-reward_calculator = RewardCalculator(gamma=gamma)
+# Print shapes after adding positional encoding
+print(f"features shape after positional encoding: {features.shape}")
 
-# 保存されたモデルの重みを読み込む（必要な場合）
-try:
-    load_model_weights(adj_generator, 'adj_generator_weights.pth')
-    load_model_weights(gcn_model, 'gcn_model_weights.pth')
-    load_model_weights(q_network, 'q_network_weights.pth')
-    load_model_weights(v_network, 'v_network_weights.pth')
-    print("Successfully loaded saved model weights.")
-except FileNotFoundError:
-    print("No saved model weights found. Training from scratch.")
+# num_node_combined_featuresを設定
+num_node_combined_features = num_node_features + pos_enc_dim
 
-# オプティマイザの設定
-optimizer_gcn = optim.Adam(gcn_model.parameters(), lr=0.001)
-optimizer_q = optim.Adam(q_network.parameters(), lr=0.001)
-optimizer_v = optim.Adam(v_network.parameters(), lr=0.001)
-optimizer_adj = adj_generator.optimizer
+# Move labels to device
+labels = labels.to(device)
+features = features.to(device)
+adj = adj.to(device)  # adjもデバイスに移動
 
-# トレーニングループ
+# Initialize components
+adj_generator = AdjacencyGenerator(d_model + pos_enc_dim, num_heads, d_ff, num_layers, hidden_size, device, dropout).to(device)
+gcn_models = [GCN(d_model + pos_enc_dim, hidden_size, num_node_combined_features).to(device) for _ in range(8)]
+final_layer = torch.nn.Linear(num_node_combined_features, num_classes).to(device)  # Initialize the final layer for classification
+v_networks = [VNetwork(d_model + pos_enc_dim, num_heads, d_ff, num_layers, dropout).to(device) for _ in range(8)]
+
+# Load saved model weights if available
+load_all_weights(adj_generator, gcn_models, v_networks, final_layer)
+
+# Set up optimizers
+optimizer_gcn = [optim.Adam(gcn_model.parameters(), lr=0.01) for gcn_model in gcn_models]
+optimizer_v = [optim.Adam(v_network.parameters(), lr=0.01) for v_network in v_networks]
+optimizer_adj = optim.Adam(adj_generator.parameters(), lr=0.01)
+optimizer_final_layer = optim.Adam(final_layer.parameters(), lr=0.01)
+
+# Create a file to log the epoch results
+log_file_path = 'training_log.txt'
+with open(log_file_path, 'w') as f:
+    f.write("Training Log\n")
+
+# 全てのモデルとデータを同じデバイスに移動
+adj_generator.to(device)
+for gcn_model in gcn_models:
+    gcn_model.to(device)
+for v_network in v_networks:
+    v_network.to(device)
+final_layer.to(device)
+features = features.to(device)
+adj = adj.to(device)
+
+
+# Training loop
 for epoch in range(epochs):
+    start_time = time.time()  # Start the timer at the beginning of the epoch
+    epoch_acc = 0
+    epoch_mean_reward = 0
+
+    print(f"\nEpoch {epoch + 1}/{epochs}")
     adj_generator.train()
-    gcn_model.train()
-    q_network.train()
-    v_network.train()
+    final_layer.train()
+    for gcn_model in gcn_models:
+        gcn_model.train()
+    for v_network in v_networks:
+        v_network.train()
 
-    node_features = features
     total_rewards = 0
-    for layer in range(10):
-        # Generate adjacency matrix
-        adj_logits, log_probs = adj_generator.generate_adjacency_logits(node_features)
-        print(f"Generated adjacency logits for layer {layer + 1}: {adj_logits.shape}")
-        print(f"Log probabilities: {log_probs}")
+    rewards = []
+    log_probs_layers = []
+    value_functions = []
 
-        adj_probs = torch.softmax(adj_logits, dim=-1)
-        print(f"Adjacency probabilities: {adj_probs.shape}")
+    updated_features = features.clone()  # 各層で特徴量を更新
 
-        # Convert adjacency matrix to edge_index and edge_weight
-        edge_index, edge_weight = dense_to_sparse(adj_probs.squeeze(0))
-        print(f"Edge index: {edge_index.shape}, Edge weight: {edge_weight.shape}")
+    for layer in range(8):
+        print(f"\nLayer {layer + 1}/8")
 
-        # Update data object
-        data.edge_index = edge_index
-        data.edge_attr = edge_weight
+        new_adj = adj.clone()  # 新しい隣接行列を初期化
+        
+        # For each node, generate new neighbors using Bernoulli distribution
+        for node_idx in range(num_nodes):
+            node_feature = updated_features[node_idx].unsqueeze(0)
+            neighbor_indices = adj[node_idx].nonzero().view(-1)
+            neighbor_features = updated_features[neighbor_indices]
 
-        # Forward pass through GCN
-        node_features = gcn_model(data.x, data.edge_index)
-        print(f"GCN output for layer {layer + 1}: {node_features.shape}")
+            with sdpa_kernel(SDPBackend.MATH):  # adj_generatorにmathバックエンドを適用
+                adj_probs, new_neighbors = adj_generator.generate_new_neighbors(node_feature, neighbor_features)
+            
+            # デバグ用のメッセージを追加
+            # print(f"adj_probs: {adj_probs}")
+            # print(f"adj_probs.shape: {adj_probs.shape}")
+            # print(f"new_neighbors: {new_neighbors}")
+            # print(f"new_neighbors.shape: {new_neighbors.shape}")
 
-        # 各層での報酬計算
-        reward = reward_calculator.reward(adj_probs)
+            if adj_probs.isnan().any() or new_neighbors.isnan().any():
+                print(f"NaN detected in adj_probs or new_neighbors at layer {layer + 1}, node {node_idx + 1}")
+                continue  # スキップして次のノードへ
+
+            # Calculate log probabilities for the generated edges
+            log_probs = new_neighbors * torch.log(adj_probs) + (1 - new_neighbors) * torch.log(1 - adj_probs)
+            log_probs_layers.append(log_probs)
+
+            # Use the generated new neighbors to update the new adjacency matrix
+            for i, neighbor_idx in enumerate(neighbor_indices):
+                new_adj[node_idx, neighbor_idx] = new_neighbors[i]
+
+        print(f"adj_probs: {adj_probs}")
+        # print(f"node_feature: {node_feature}")
+
+        # Sample nodes for computing gradient and state value function V
+        sampled_indices = sample_nodes(features, sample_ratio=0.2)
+        print(f"sampled indices: {sampled_indices}")
+        sampled_features = features[sampled_indices]
+        print(f"Sampled features for layer {layer + 1}: {sampled_features.shape}")
+
+        if torch.isnan(sampled_features).any():
+            print(f"NaN detected in sampled_features at layer {layer + 1} of epoch {epoch + 1}")
+
+        # Store log probabilities and value functions for later use
+        with sdpa_kernel(SDPBackend.MATH):  # VNetworkにmathバックエンドを適用
+            value_function = v_networks[layer](sampled_features.unsqueeze(0)).view(-1)
+        value_function = torch.clamp(value_function, min=-1000, max=1000)  # Clamp values to prevent extreme values
+        value_functions.append(value_function)
+        print(f"Value function for layer {layer + 1}: {value_function}")
+
+        # Forward pass through GCN using all nodes
+        edge_index, edge_weight = dense_to_sparse(new_adj)
+        data.edge_index = edge_index.to(device)
+        data.edge_attr = edge_weight.to(device)
+        data.x = features.to(device)  # データのxをCUDAに移動
+        node_features = gcn_models[layer](data.x, data.edge_index)  # featuresを明示的にデバイスに移動
+        
+        updated_features = node_features
+
+        # print(f"edge_index: {edge_index}")
+        print(f"edge_index.shape: {edge_index.shape}")
+        # print(f"new_neighbors: {new_neighbors}")
+        # print(f"new_neighbors.shape: {new_neighbors.shape}")
+
+        if torch.isnan(node_features).any():
+            print(f"NaN detected in node_features at layer {layer + 1} of epoch {epoch + 1}")
+
+        # Calculate reward
+        sum_new_neighbors = new_adj.sum().item()  # 合計を計算
+        print(f"sum_new_neighbors: {sum_new_neighbors}")
+        log_sum = 1 / torch.exp(torch.tensor(sum_new_neighbors, device=device))  # sum_new_neighborsをtensorに変換
+        reward = log_sum.item()
+
+        if sum_new_neighbors == 0:
+            reward = 0.0
+
+        rewards.append(reward)
         total_rewards += reward
+        print(f"Reward for layer {layer + 1}: {reward}")
 
-        # 各層でのV値の計算
-        value_function = v_network(features.unsqueeze(0)).view(-1)
-        print(f"Value function shape: {value_function.shape}, Value function: {value_function}")
+    # Apply final dense layer to convert to 7 classes
+    output = final_layer(node_features[idx_train])
+    output = F.log_softmax(output, dim=1)
+    # print(f'output: {output}')
+    print(f'output.shape: {output.shape}')
+    
+    acc = accuracy(output, labels[idx_train])
+    print(f"Training accuracy: {acc * 100:.2f}%")  # Print accuracy
+    epoch_acc += acc
+    # Calculate cumulative rewards for each layer
+    cumulative_rewards = []
+    for l in range(8):
+        cumulative_reward = sum(rewards[l:]) + (8 * acc)
+        cumulative_rewards.append(cumulative_reward)
+    print(f"Cumulative rewards: {cumulative_rewards}")
 
-        # 各層でのQ値の計算
-        q_values = q_network(features.unsqueeze(0), adj_probs.unsqueeze(0)).view(-1)
-        print(f"Q values shape: {q_values.shape}, Q values: {q_values}")
+    # Convert cumulative_rewards to FloatTensor
+    cumulative_rewards = torch.tensor(cumulative_rewards, dtype=torch.float, device=device)
 
-        # 各層でのAdvantageの計算
-        advantages = q_values - value_function
-        print(f"Advantages shape: {advantages.shape}, Advantages: {advantages}")
+    # Calculate final cumulative reward with accuracy for the last layer
+    final_cumulative_reward = cumulative_rewards[-1]
+    print(f"Final cumulative reward with accuracy: {final_cumulative_reward}")
 
-        # 各層でのY λ値の計算
-        y_lambda_values = reward_calculator.y_lambda(torch.tensor([reward for _ in range(len(labels))], device=device), value_function).view(-1)
-        print(f"Y lambda values shape: {y_lambda_values.shape}, Y lambda values: {y_lambda_values}")
+    # Calculate advantages
+    advantages_layers = []
+    for l in range(8):
+        advantages = cumulative_rewards[l] - value_functions[l]
+        # print(f"cumulative_rewards for layer {l + 1}: {cumulative_rewards[l]}")
+        # print(f"value_functions for layer {l + 1}: {value_functions[l]}")
 
-        # Ensure shapes match for loss calculation
-        min_size = min(q_values.size(0), y_lambda_values.size(0))
-        q_values = q_values[:min_size]
-        y_lambda_values = y_lambda_values[:min_size]
-        value_function = value_function[:min_size]
-        advantages = advantages[:min_size]
+        advantages_layers.append(advantages)
+        print(f"Advantages for layer {l + 1}: {advantages}")
 
-        print(f"Trimmed Q values shape: {q_values.shape}, Trimmed Y lambda values shape: {y_lambda_values.shape}")
-        print(f"Trimmed Value function shape: {value_function.shape}")
-        print(f"Trimmed Advantages shape: {advantages.shape}")
-
-        # Update Q-network
-        optimizer_q.zero_grad()
-        q_loss = F.mse_loss(q_values, y_lambda_values)
-        print(f"Q loss: {q_loss.item()}")
-        q_loss.backward(retain_graph=True)
-        optimizer_q.step()
-        print("Q is updated!")
-
-        # Update V-network
-        optimizer_v.zero_grad()
-        v_loss = F.mse_loss(value_function, y_lambda_values)
-        print(f"V loss: {v_loss.item()}")
-        v_loss.backward(retain_graph=True)
-        optimizer_v.step()
-        print("V is updated!")
-
-        # Update Adjacency Generator
-        adj_generator.update_parameters(log_probs, advantages)
-
-    # 最後のノード特徴量を2クラス分類に使用
-    output = node_features
-    loss_gcn = F.nll_loss(output[idx_train], labels[idx_train])
+    # Update GCN
+    for opt_gcn in optimizer_gcn:
+        opt_gcn.zero_grad()
+    loss_gcn = F.nll_loss(output, labels[idx_train])
     print(f"GCN loss: {loss_gcn.item()}")
+    loss_gcn.backward(retain_graph=True)
 
-    # 最後に正解率に基づいて報酬を加算
-    accuracy_reward = ...  # 正解率に基づいて計算するロジックを追加
-    total_rewards += accuracy_reward
+    # Apply gradient clipping
+    for gcn_model in gcn_models:
+        torch.nn.utils.clip_grad_norm_(gcn_model.parameters(), max_norm=1.0)
+    torch.nn.utils.clip_grad_norm_(adj_generator.parameters(), max_norm=1.0)
+    torch.nn.utils.clip_grad_norm_(final_layer.parameters(), max_norm=1.0)
+    for v_network in v_networks:
+        torch.nn.utils.clip_grad_norm_(v_network.parameters(), max_norm=1.0)
 
-    # トレーニング終了後にモデルの重みを保存
-    save_model_weights(adj_generator, 'adj_generator_weights.pth')
-    save_model_weights(gcn_model, 'gcn_model_weights.pth')
-    save_model_weights(q_network, 'q_network_weights.pth')
-    save_model_weights(v_network, 'v_network_weights.pth')
+    # Update Adjacency Generator
+    optimizer_adj.zero_grad()
+    log_probs_layers_tensor = torch.stack(log_probs_layers)  # log_probs_layersをテンソルに変換
+    advantages_tensor = torch.stack(advantages_layers)  # advantages_layersをテンソルに変換
+
+    # lossを計算し、その勾配を使用して更新
+    loss_adj = -torch.mean(log_probs_layers_tensor * advantages_tensor)  # 符号を反転
+    loss_adj.backward()
+    optimizer_adj.step()
+
+    # Update V-networks
+    for i, (v_network, v_opt) in enumerate(zip(v_networks, optimizer_v)):
+        v_opt.zero_grad()
+        v_loss = F.mse_loss(value_functions[i], torch.tensor([cumulative_rewards[i]], device=device).detach())
+        print(f"V-network loss for layer {i + 1}: {v_loss.item()}")
+        v_loss.backward(retain_graph=True)
+
+    # After all gradients are computed, step the optimizers
+    for opt_gcn in optimizer_gcn:
+        opt_gcn.step()
+    optimizer_final_layer.step()
+    for v_opt in optimizer_v:
+        v_opt.step()
+
+    epoch_mean_reward = cumulative_rewards.mean()
+
+    # Save model weights after each epoch
+    save_all_weights(adj_generator, gcn_models, v_networks, final_layer)
+
+    end_time = time.time()
+    epoch_time = end_time - start_time
+
+    # Synchronize CUDA and wait for 2 seconds to ensure all operations are complete
+    torch.cuda.synchronize()
+    print(f"\nEpoch {epoch + 1}/{epochs}")
+    print(f"Epoch accuracy: {epoch_acc * 100:.2f}%")  # Print average accuracy across all batches
+    print(f"Epoch mean rewards: {epoch_mean_reward}")
+    print(f"Advantages: {advantages_layers}")
+    # Write the results to the log file
+    with open(log_file_path, 'a') as f:
+        f.write(f"\nEpoch {epoch + 1}/{epochs}\n")
+        f.write(f"Epoch accuracy: {epoch_acc * 100:.2f}%\n")
+        f.write(f"Epoch mean rewards: {epoch_mean_reward}\n")
+        f.write(f"Epoch time: {epoch_time:.2f} seconds\n")  # Write the epoch time to the log file
+        for i in range(8):
+            f.write(f"Advantages for layer {i + 1}: {advantages_layers[i]}\n")
+
+    time.sleep(2)
 
 print("Training finished and model weights saved!")
+
+# Test phase
+print("Starting testing phase...")
+adj_generator.eval()
+final_layer.eval()
+for gcn_model in gcn_models:
+    gcn_model.eval()
+for v_network in v_networks:
+    v_network.eval()
+
+with torch.no_grad():
+    for layer in range(8):
+        print(f"\nTesting Layer {layer + 1}/8")
+
+        new_adj = adj.clone()  # 新しい隣接行列を初期化
+
+        for node_idx in range(num_nodes):
+            node_feature = features[node_idx].unsqueeze(0)
+            neighbor_indices = adj[node_idx].nonzero().view(-1).to('cpu')  # Get the indices of neighbors
+            neighbor_features = features[neighbor_indices].to(device)
+            
+            with sdpa_kernel(SDPBackend.MATH):
+                adj_probs, new_neighbors = adj_generator.generate_new_neighbors(node_feature, neighbor_features)
+
+            for i, neighbor_idx in enumerate(neighbor_indices):
+                new_adj[node_idx, neighbor_idx] = new_neighbors[i]
+
+        edge_index, edge_weight = dense_to_sparse(new_adj)
+        data.edge_index = edge_index.to(device)
+        data.edge_attr = edge_weight.to(device)
+        data.x = features.to(device)  # テストデータもデバイスに移動
+        node_features = gcn_models[layer](data.x, data.edge_index)
+
+    output = final_layer(node_features[idx_test])
+    output = F.log_softmax(output, dim=1)
+    test_acc = accuracy(output, labels[idx_test])
+    print(f"Test accuracy: {test_acc * 100:.2f}%")
+
+    # Write test results to the log file
+    with open(log_file_path, 'a') as f:
+        f.write(f"\nTest accuracy: {test_acc * 100:.2f}%\n")
+
+print("Testing phase finished!")

@@ -1,0 +1,67 @@
+Training Log
+
+Epoch 1/100
+Epoch accuracy: 5.71%
+Epoch mean rewards: 0.4571428596973419
+Epoch time: 360.49 seconds
+Advantages for layer 8: tensor([0.6446], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([0.3950], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([0.2581], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([0.6486], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([0.5021], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([0.3887], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([0.0794], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([0.6305], device='cuda:0', grad_fn=<SubBackward0>)
+Epoch 2/100
+Epoch accuracy: 29.29%
+Epoch mean rewards: 2.3428571224212646
+Epoch time: 371.24 seconds
+Advantages for layer 8: tensor([-17.4023], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-18.0688], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-18.2275], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-16.7443], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-17.7630], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-18.1504], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-18.4251], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-17.3892], device='cuda:0', grad_fn=<SubBackward0>)
+Epoch 3/100
+Epoch accuracy: 17.86%
+Epoch mean rewards: 1.4285714626312256
+Epoch time: 338.76 seconds
+Advantages for layer 8: tensor([-5.7602], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-3.0478], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-5.5122], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-2.2707], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-5.3701], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-5.8131], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-6.0745], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-1.7239], device='cuda:0', grad_fn=<SubBackward0>)
+Epoch 4/100
+Epoch accuracy: 20.00%
+Epoch mean rewards: 1.600000023841858
+Epoch time: 339.17 seconds
+Advantages for layer 8: tensor([10.9807], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([12.6216], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([12.1810], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([12.8019], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([12.4012], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([11.7016], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([12.0235], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([12.3004], device='cuda:0', grad_fn=<SubBackward0>)
+Epoch 5/100
+Epoch accuracy: 29.29%
+Epoch mean rewards: 2.3428571224212646
+Epoch time: 341.49 seconds
+Advantages for layer 8: tensor([11.5626], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([10.7685], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([11.7377], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([10.4349], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([11.7011], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([11.6225], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([11.9677], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([10.0693], device='cuda:0', grad_fn=<SubBackward0>)
+Epoch 6/100
+Epoch accuracy: 20.00%
+Epoch mean rewards: 1.600000023841858
+Epoch time: 340.42 seconds
+Advantages for layer 8: tensor([7.2770], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([5.3569], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([7.1406], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([4.7715], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([7.2016], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([7.2338], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([7.6539], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([4.5187], device='cuda:0', grad_fn=<SubBackward0>)
+Epoch 7/100
+Epoch accuracy: 12.14%
+Epoch mean rewards: 0.9714285731315613
+Epoch time: 340.40 seconds
+Advantages for layer 8: tensor([2.1420], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-0.1327], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([1.8941], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-0.5718], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([1.8238], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([2.1473], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([2.4059], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-0.7356], device='cuda:0', grad_fn=<SubBackward0>)
+Epoch 8/100
+Epoch accuracy: 10.00%
+Epoch mean rewards: 0.800000011920929
+Epoch time: 338.29 seconds
+Advantages for layer 8: tensor([-1.9263], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-3.7830], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-2.1599], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-3.7002], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-2.3829], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-1.9440], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-1.8419], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-3.9196], device='cuda:0', grad_fn=<SubBackward0>)
+Epoch 9/100
+Epoch accuracy: 14.29%
+Epoch mean rewards: 1.1428571939468384
+Epoch time: 340.37 seconds
+Advantages for layer 8: tensor([-3.9513], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-4.5223], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-4.0150], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-3.9327], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-4.3081], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-3.9669], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-4.0015], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-4.2386], device='cuda:0', grad_fn=<SubBackward0>)
+Epoch 10/100
+Epoch accuracy: 29.29%
+Epoch mean rewards: 2.3428571224212646
+Epoch time: 340.51 seconds
+Advantages for layer 8: tensor([-3.3725], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-2.3451], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-3.2066], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-1.5218], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-3.4716], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-3.3370], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-3.4868], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-1.8843], device='cuda:0', grad_fn=<SubBackward0>)
+Epoch 11/100
+Epoch accuracy: 29.29%
+Epoch mean rewards: 2.3428571224212646
+Epoch time: 339.23 seconds
+Advantages for layer 8: tensor([-2.8386], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-0.3956], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-2.4459], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([0.2900], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-2.6277], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-2.7074], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-2.9325], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([0.0022], device='cuda:0', grad_fn=<SubBackward0>)
+Epoch 12/100
+Epoch accuracy: 21.43%
+Epoch mean rewards: 1.7142857313156128
+Epoch time: 341.31 seconds
+Advantages for layer 8: tensor([-2.1440], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([1.0171], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-1.5752], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([1.2890], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-1.6526], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-1.9065], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-2.1306], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([1.2075], device='cuda:0', grad_fn=<SubBackward0>)
+Epoch 13/100
+Epoch accuracy: 20.00%
+Epoch mean rewards: 1.600000023841858
+Epoch time: 344.32 seconds
+Advantages for layer 8: tensor([-0.4395], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([2.3900], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([0.1521], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([2.1690], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([0.2272], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-0.1317], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([-0.2798], device='cuda:0', grad_fn=<SubBackward0>)Advantages for layer 8: tensor([2.3053], device='cuda:0', grad_fn=<SubBackward0>)
