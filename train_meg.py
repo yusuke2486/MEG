@@ -125,8 +125,13 @@ for epoch in range(epochs):
         print(f"\nLayer {layer + 1}/8")
 
         new_adj = adj.clone()  # 新しい隣接行列を初期化
+
+        # ノードをサンプリング
+        sampled_indices = sample_nodes(features, sample_ratio=0.2)  
+        sampled_indices_set = set(sampled_indices.tolist())  # サンプリングされたノードのセット
         
         # For each node, generate new neighbors using Bernoulli distribution
+        layer_log_probs = []
         for node_idx in range(num_nodes):
             node_feature = updated_features[node_idx].unsqueeze(0)
             neighbor_indices = adj[node_idx].nonzero().view(-1)
@@ -135,30 +140,25 @@ for epoch in range(epochs):
             with sdpa_kernel(SDPBackend.MATH):  # adj_generatorにmathバックエンドを適用
                 adj_probs, new_neighbors = adj_generator.generate_new_neighbors(node_feature, neighbor_features)
             
-            # デバグ用のメッセージを追加
-            # print(f"adj_probs: {adj_probs}")
-            # print(f"adj_probs.shape: {adj_probs.shape}")
-            # print(f"new_neighbors: {new_neighbors}")
-            # print(f"new_neighbors.shape: {new_neighbors.shape}")
-
             if adj_probs.isnan().any() or new_neighbors.isnan().any():
                 print(f"NaN detected in adj_probs or new_neighbors at layer {layer + 1}, node {node_idx + 1}")
                 continue  # スキップして次のノードへ
 
-            # Calculate log probabilities for the generated edges
-            log_probs = new_neighbors * torch.log(adj_probs) + (1 - new_neighbors) * torch.log(1 - adj_probs)
-            log_probs_layers.append(log_probs)
+            if node_idx in sampled_indices_set:
+                # Calculate log probabilities for the generated edges
+                log_probs = new_neighbors * torch.log(adj_probs) + (1 - new_neighbors) * torch.log(1 - adj_probs)
+                layer_log_probs.append(log_probs.mean())
 
             # Use the generated new neighbors to update the new adjacency matrix
             for i, neighbor_idx in enumerate(neighbor_indices):
                 new_adj[node_idx, neighbor_idx] = new_neighbors[i]
 
-        print(f"adj_probs: {adj_probs}")
-        # print(f"node_feature: {node_feature}")
+        if layer_log_probs:
+            log_probs_layers.append(torch.stack(layer_log_probs).mean())
 
-        # Sample nodes for computing gradient and state value function V
-        sampled_indices = sample_nodes(features, sample_ratio=0.2)
-        print(f"sampled indices: {sampled_indices}")
+        print(f"adj_probs: {adj_probs}")
+
+        # Sampled nodes for computing gradient and state value function V
         sampled_features = features[sampled_indices]
         print(f"Sampled features for layer {layer + 1}: {sampled_features.shape}")
 
@@ -181,10 +181,7 @@ for epoch in range(epochs):
         
         updated_features = node_features
 
-        # print(f"edge_index: {edge_index}")
         print(f"edge_index.shape: {edge_index.shape}")
-        # print(f"new_neighbors: {new_neighbors}")
-        # print(f"new_neighbors.shape: {new_neighbors.shape}")
 
         if torch.isnan(node_features).any():
             print(f"NaN detected in node_features at layer {layer + 1} of epoch {epoch + 1}")
@@ -192,7 +189,7 @@ for epoch in range(epochs):
         # Calculate reward
         sum_new_neighbors = new_adj.sum().item()  # 合計を計算
         print(f"sum_new_neighbors: {sum_new_neighbors}")
-        log_sum = 1 / torch.exp(torch.tensor(sum_new_neighbors, device=device))  # sum_new_neighborsをtensorに変換
+        log_sum = -torch.log(torch.tensor(sum_new_neighbors + 1, device=device))  # sum_new_neighborsをtensorに変換
         reward = log_sum.item()
 
         if sum_new_neighbors == 0:
@@ -205,7 +202,6 @@ for epoch in range(epochs):
     # Apply final dense layer to convert to 7 classes
     output = final_layer(node_features[idx_train])
     output = F.log_softmax(output, dim=1)
-    # print(f'output: {output}')
     print(f'output.shape: {output.shape}')
     
     acc = accuracy(output, labels[idx_train])
@@ -229,9 +225,6 @@ for epoch in range(epochs):
     advantages_layers = []
     for l in range(8):
         advantages = cumulative_rewards[l] - value_functions[l]
-        # print(f"cumulative_rewards for layer {l + 1}: {cumulative_rewards[l]}")
-        # print(f"value_functions for layer {l + 1}: {value_functions[l]}")
-
         advantages_layers.append(advantages)
         print(f"Advantages for layer {l + 1}: {advantages}")
 
@@ -252,12 +245,15 @@ for epoch in range(epochs):
 
     # Update Adjacency Generator
     optimizer_adj.zero_grad()
-    log_probs_layers_tensor = torch.stack(log_probs_layers)  # log_probs_layersをテンソルに変換
-    advantages_tensor = torch.stack(advantages_layers)  # advantages_layersをテンソルに変換
 
+    # 各層のlog_probsの平均を計算
+    log_probs_mean_layers = torch.stack(log_probs_layers)
+    print(f"log_probs_mean_layers: { log_probs_mean_layers}")
+    print(f"log_probs_mean_layers.shape: { log_probs_mean_layers.shape}")
+    
     # lossを計算し、その勾配を使用して更新
-    loss_adj = -torch.mean(log_probs_layers_tensor * advantages_tensor)  # 符号を反転
-    loss_adj.backward()
+    loss_adj = -torch.mean(log_probs_mean_layers * torch.stack(advantages_layers))  # 符号を反転
+    loss_adj.backward(retain_graph=True)
     optimizer_adj.step()
 
     # Update V-networks
