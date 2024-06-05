@@ -75,11 +75,18 @@ labels = labels.to(device)
 features = features.to(device)
 adj = adj.to(device)  # adjもデバイスに移動
 
+device_ids = [0, 1, 2, 3]
+
 # Initialize components
 adj_generators = [AdjacencyGenerator(d_model + pos_enc_dim, num_heads, d_ff, num_layers, hidden_size, device, dropout).to(device) for _ in range(num_model_layers)]
 gcn_models = [GCN(d_model + pos_enc_dim, hidden_size, num_node_combined_features, num_gcn_layers).to(device) for _ in range(num_model_layers)]
 final_layer = torch.nn.Linear(num_node_combined_features, num_classes).to(device)  # Initialize the final layer for classification
 v_networks = [VNetwork(d_model + pos_enc_dim, num_heads, d_ff, num_layers, 541, dropout).to(device) for _ in range(num_model_layers)]
+# To paralleliize for GPUs
+adj_generators = [nn.DataParallel(adj_gen, device_ids=device_ids) for adj_gen in adj_generators]
+gcn_models = [nn.DataParallel(gcn_model, device_ids=device_ids) for gcn_model in gcn_models]
+final_layer = nn.DataParallel(final_layer, device_ids=device_ids)
+v_networks = [nn.DataParallel(v_network, device_ids=device_ids) for v_network in v_networks]
 
 load_all_weights(adj_generators, gcn_models, v_networks, final_layer)
 
@@ -145,7 +152,7 @@ for epoch in range(epochs):
             neighbor_features = updated_features[neighbor_indices]
 
             with sdpa_kernel(SDPBackend.MATH):  # adj_generatorにmathバックエンドを適用
-                adj_logits, new_neighbors = adj_generators[layer].generate_new_neighbors(node_feature, neighbor_features)
+                adj_logits, new_neighbors = adj_generators[layer].module.generate_new_neighbors(node_feature, neighbor_features)
 
             if node_idx in sampled_indices_set:
                 log_probs = criteria(adj_logits/3 + 1e-9, new_neighbors)
@@ -167,7 +174,7 @@ for epoch in range(epochs):
         # 修正するべき個所。Vの計算には、各層でアップデートされたサンプリングされたノードの特徴量を使用するべき
         # Store log probabilities and value functions for later use
         with sdpa_kernel(SDPBackend.MATH):  # VNetworkにmathバックエンドを適用
-            value_function = v_networks[layer](sampled_features.unsqueeze(0)).view(-1)
+            value_function = v_networks[layer].module(sampled_features.unsqueeze(0)).view(-1)
         value_functions.append(value_function)
         print(f"Value function for layer {layer + 1}: {value_function}")
 
@@ -176,7 +183,7 @@ for epoch in range(epochs):
         data.edge_index = edge_index.to(device)
         data.edge_attr = edge_weight.to(device)
         data.x = features.to(device)  # データのxをCUDAに移動
-        node_features = gcn_models[layer](data.x, data.edge_index)  # featuresを明示的にデバイスに移動
+        node_features = gcn_models[layer].module(data.x, data.edge_index)  # featuresを明示的にデバイスに移動
         
         updated_features = node_features
 
@@ -193,7 +200,7 @@ for epoch in range(epochs):
         total_rewards += reward
         print(f"Reward for layer {layer + 1}: {reward}")
 
-    output = final_layer(node_features[idx_train])
+    output = final_layer.module(node_features[idx_train])
     output = F.log_softmax(output, dim=1)
     print(f'output.shape: {output.shape}')
     
