@@ -8,22 +8,15 @@ class AdjacencyGenerator(nn.Module):
         self.encoder = TransformerEncoder(d_model, num_heads, d_ff, num_layers, dropout).to(device)
         self.device = device
 
-        # Linear layer to reduce adj_logits to a single value for each node
-        self.weight_vector = nn.Linear(d_model, 1).to(device)
-
-        # # Initialize weights to 0
-        # self._initialize_weights()
-
-    def _initialize_weights(self):
-        for p in self.encoder.parameters():
-            nn.init.constant_(p, 0)
-        nn.init.constant_(self.weight_vector.weight, 0)
-        nn.init.constant_(self.weight_vector.bias, 0)
+        self.weight_layer = nn.Linear(d_model, 2*d_model).to(device)
+        self.weight_layer2 = nn.Linear(2*d_model, 2*d_model).to(device)
+        self.weight_vector = nn.Linear(2*d_model, 1).to(device)
 
     def forward(self, node_features, neighbor_features):
         input_features = torch.cat([node_features, neighbor_features], dim=0)  # (num_neighbors + 1, 1, d_model)        
         adj_logits = self.encoder(input_features)  # (num_neighbors + 1, 1, d_model)        
-        adj_logits = adj_logits  # (num_neighbors + 1, d_model)        
+        adj_logits = self.weight_layer(adj_logits)
+        adj_logits = self.weight_layer2(adj_logits)
         adj_logits = self.weight_vector(adj_logits).squeeze(1)  # (num_neighbors + 1)
         adj_probs = torch.sigmoid(adj_logits/3).to(self.device)  # Reduce to (num_neighbors + 1)
 
