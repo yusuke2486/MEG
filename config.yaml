@@ -1,0 +1,33 @@
+# config.yaml
+
+# Model hyperparameters
+model:
+  num_model_layers: 8
+  num_node_features: 1433
+  num_classes: 7
+  hidden_size: 64
+  d_model: 1433
+  num_heads: 8
+  d_ff: 256
+  num_layers: 2
+  dropout: 0.1
+  num_gcn_layers: 10
+
+# Training hyperparameters
+training:
+  epochs: 100
+  gamma: 0.99
+
+# Positional encoding
+positional_encoding:
+  pos_enc_dim: 7
+
+# Device (use 'auto' as a placeholder)
+device: auto
+
+# Optimizer learning rates
+optimizer:
+  lr_gcn: 0.001
+  lr_v: 0.001
+  lr_adj: 0.001
+  lr_final_layer: 0.001
