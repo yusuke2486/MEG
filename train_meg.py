@@ -310,7 +310,7 @@ with torch.no_grad():
             neighbor_features = features[neighbor_indices].to(device)
             
             with sdpa_kernel(SDPBackend.MATH):
-                adj_probs, new_neighbors = adj_generators[layer].generate_new_neighbors(node_feature, neighbor_features)
+                adj_probs, new_neighbors = adj_generators[layer].module.generate_new_neighbors(node_feature, neighbor_features)
 
             for i, neighbor_idx in enumerate(neighbor_indices):
                 new_adj[node_idx, neighbor_idx] = new_neighbors[i]
@@ -319,9 +319,9 @@ with torch.no_grad():
         data.edge_index = edge_index.to(device)
         data.edge_attr = edge_weight.to(device)
         data.x = features.to(device)  # テストデータもデバイスに移動
-        node_features = gcn_models[layer](data.x, data.edge_index)
+        node_features = gcn_models[layer].module(data.x, data.edge_index)
 
-    output = final_layer(node_features[idx_test])
+    output = final_layer.module(node_features[idx_test])
     output = F.log_softmax(output, dim=1)
     test_acc = accuracy(output, labels[idx_test])
     print(f"Test accuracy: {test_acc * 100:.2f}%")
