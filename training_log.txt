@@ -8,3 +8,12 @@ Advantages for layer 2: 2.232731342315674
 Advantages for layer 3: -0.8787136077880859
 Advantages for layer 4: 0.6154968738555908
 Advantages for layer 5: 1.2230758666992188
+
+Epoch 2/100
+Epoch accuracy: 57.14%
+Epoch time: 487.16 seconds
+Advantages for layer 1: 0.44197821617126465
+Advantages for layer 2: 2.3826067447662354
+Advantages for layer 3: -1.3592603206634521
+Advantages for layer 4: 0.11848163604736328
+Advantages for layer 5: 0.9385995268821716
