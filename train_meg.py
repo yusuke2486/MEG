@@ -315,6 +315,7 @@ def train(rank, world_size):
 
     # Test phase
     print("Starting testing phase...")
+
     for adj_generator in adj_generators:
         adj_generator.eval()
     final_layer.eval()
@@ -350,7 +351,7 @@ def train(rank, world_size):
         output = F.log_softmax(output, dim=1)
         test_acc = accuracy(output, labels[idx_test])
         print(f"Test accuracy: {test_acc * 100:.2f}%")
-
+        
         if rank == 0:
             with open(log_file_path, 'a') as f:
                 f.write(f"\nTest accuracy: {test_acc * 100:.2f}%\n")
